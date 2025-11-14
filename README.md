@@ -16,6 +16,8 @@ Protótipo para Bengala assistiva com ESP32, 4× HC-SR04, OLED SSD1306 e telemet
 
 ## MQTT
 - Broker: `test.mosquitto.org:1883` (teste)
+Obs: Se por algum motivo o Broker não funcionar, altere no código e no APP para os seguintes Brokers:
+broker.hivemq.com, broker.emqx.io,mqtt.eclipseprojects.io, test.mosquitto.org
 - Tópicos:
   - `cane/<ID>/status` (retain/LWT)
   - `cane/<ID>/telemetry` (JSON)

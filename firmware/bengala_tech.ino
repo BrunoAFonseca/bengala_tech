@@ -8,7 +8,12 @@
 /* ======= Wi-Fi / MQTT ======= */
 const char* WIFI_SSID = "Wokwi-GUEST";
 const char* WIFI_PASS = "";
-const char* MQTT_HOST = "test.mosquitto.org";
+const char* MQTT_HOST = "broker.hivemq.com"; 
+// Caso não conecte, altere o MQTT_HOST para um desses abaixo:
+/*broker.hivemq.com*/
+/*broker.emqx.io*/
+/*mqtt.eclipseprojects.io*/
+/*test.mosquitto.org*/
 const uint16_t MQTT_PORT = 1883;
 const char* DEVICE_ID = "cane-esp32-bengala-tech"; // <-- mude para um ID único
 
@@ -23,6 +28,114 @@ String tp(const char* leaf){ String s="cane/"; s+=DEVICE_ID; s+="/"; s+=leaf; re
 #define OLED_ADDR    0x3C
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
+/* ======= COMEÇO DO MAPA NA TELA OLED ======= */
+void renderMapTiny(Adafruit_SSD1306 &display, long L, long F, long R, long D){
+  // helpers locais
+  auto arrowsFor = [](long cm)->uint8_t { return (cm>300)?3 : (cm>=150)?2 : 1; };
+  auto triR=[&](int x,int y,int s){ display.fillTriangle(x,y, x-s,y-s, x-s,y+s, SSD1306_WHITE); };
+  auto triL=[&](int x,int y,int s){ display.fillTriangle(x,y, x+s,y-s, x+s,y+s, SSD1306_WHITE); };
+  auto triU=[&](int x,int y,int s){ display.fillTriangle(x,y, x-s,y+s, x+s,y+s, SSD1306_WHITE); };
+  auto triD=[&](int x,int y,int s){ display.fillTriangle(x,y, x-s,y-s, x+s,y-s, SSD1306_WHITE); };
+  auto textW=[&](const String& s){ int16_t x1,y1; uint16_t w,h; display.getTextBounds(s,0,0,&x1,&y1,&w,&h); return (int)w; };
+
+  display.clearDisplay();
+  display.setTextWrap(false);
+  display.setTextSize(1);
+  display.setTextColor(SSD1306_WHITE);
+
+  // título
+  const char* ttl = "Bengala Tech";
+  int tw = textW(ttl);
+  display.setCursor((128 - tw)/2, 0);
+  display.print(ttl);
+  display.drawLine(2, 10, 126, 10, SSD1306_WHITE);
+
+  // quadro grande
+  const int boxX = 8;
+  const int boxY = 14;
+  const int boxW = 62;
+  const int boxH = 46;
+  display.drawRect(boxX, boxY, boxW, boxH, SSD1306_WHITE);
+
+  // centro = quadrado pequeno
+  const int cx = boxX + boxW/2;
+  const int cy = boxY + boxH/2;
+  const int userSize = 4;
+  display.fillRect(cx - userSize/2, cy - userSize/2, userSize, userSize, SSD1306_WHITE);
+
+  // parâmetros das setas
+  const int triS = 3;
+  const int edge = 4;
+  const int gapH = 7;   // distância do centro p/ 1ª seta horizontal (E/D)
+  const int gapV = 3;  // distância do centro p/ 1ª seta vertical   (Fr/Bx)
+
+  // ---- DIREITA ----
+  {
+    int a = cx + userSize/2 + gapH;
+    int b = boxX + boxW - edge;
+    int p1 = a + (b - a) * 1 / 4;
+    int p2 = a + (b - a) * 2 / 4;
+    int p3 = a + (b - a) * 3 / 4;
+    uint8_t n = arrowsFor(R);
+    if (n >= 1) triR(p1, cy, triS);
+    if (n >= 2) triR(p2, cy, triS);
+    if (n >= 3) triR(p3, cy, triS);
+  }
+
+  // ---- ESQUERDA ----
+  {
+    int a = boxX + edge;
+    int b = cx - userSize/2 - gapH;
+    int p1 = a + (b - a) * 1 / 4;   // perto da borda
+    int p2 = a + (b - a) * 2 / 4;
+    int p3 = a + (b - a) * 3 / 4;   // perto do centro
+    uint8_t n = arrowsFor(L);
+    if (n >= 1) triL(p3, cy, triS); // começa perto do centro
+    if (n >= 2) triL(p2, cy, triS);
+    if (n >= 3) triL(p1, cy, triS);
+  }
+
+  // ---- CIMA (FRENTE) ----
+  {
+    int a = boxY + edge;
+    int b = cy - userSize/2 - gapV;
+    int p1 = a + (b - a) * 1 / 4;   // perto da borda
+    int p2 = a + (b - a) * 2 / 4;
+    int p3 = a + (b - a) * 3 / 4;   // perto do centro
+    uint8_t n = arrowsFor(F);
+    if (n >= 1) triU(cx, p3, triS);
+    if (n >= 2) triU(cx, p2, triS);
+    if (n >= 3) triU(cx, p1, triS);
+  }
+
+  // ---- BAIXO (CHÃO) ----
+  {
+    int a = cy + userSize/2 + gapV;
+    int b = boxY + boxH - edge;
+    int p1 = a + (b - a) * 1 / 4;   // perto do centro
+    int p2 = a + (b - a) * 2 / 4;
+    int p3 = a + (b - a) * 3 / 4;   // perto da borda
+    uint8_t n = arrowsFor(D);
+    if (n >= 1) triD(cx, p1, triS);
+    if (n >= 2) triD(cx, p2, triS);
+    if (n >= 3) triD(cx, p3, triS);
+  }
+
+  // textos à direita
+  const int colRight = boxX + boxW + 6;
+  const int baseY = 16;   // primeira linha
+  const int step  = 12;   // distância entre linhas
+
+  display.setCursor(colRight, baseY + step*0); display.print("Fr:"); display.print((int)F);
+  display.setCursor(colRight, baseY + step*1); display.print("Dr:"); display.print((int)R);
+  display.setCursor(colRight, baseY + step*2); display.print("Bx:"); display.print((int)D);
+  display.setCursor(colRight, baseY + step*3); display.print("Es:"); display.print((int)L);
+
+  display.display();
+}
+
+/* ======= FIM NOVO MAPA ======= */
+
 /* ======= Pinos ======= */
 #define I2C_SDA 21
 #define I2C_SCL 22
@@ -35,11 +148,11 @@ USPins S_down  = {14, 32, "down"};  // TRIG 14, ECHO 32
 /* ======= Leitura rápida ======= */
 #define FAST_MODE 1
 #if FAST_MODE
-  const unsigned long PULSE_TIMEOUT_US = 24000; // 0..400 cm
+  const unsigned long PULSE_TIMEOUT_US = 24000;
   const uint8_t  INTER_SENSOR_DELAY_MS = 6;
   const uint8_t  FRAME_DELAY_MS        = 0;
   const int      SNAP_DELTA_CM         = 20;
-  const uint8_t  EMA_NUM               = 3;  // 3/4 antigo + 1/4 novo
+  const uint8_t  EMA_NUM               = 3; 
   const uint8_t  EMA_DEN               = 4;
 #else
   const unsigned long PULSE_TIMEOUT_US = 30000;
@@ -63,7 +176,6 @@ long lastDown=0;
 
 /* ======= Utils ======= */
 int band3(long cm){ if(cm<0) return 0; if(cm<=BAND1_MAX_CM) return 1; if(cm<=BAND2_MAX_CM) return 2; return 3; }
-int textWidth(const String& s){ int16_t x1,y1; uint16_t w,h; display.getTextBounds(s,0,0,&x1,&y1,&w,&h); return (int)w; }
 long readUltrasonicCM(uint8_t trig,uint8_t echo){
   digitalWrite(trig,LOW); delayMicroseconds(2);
   digitalWrite(trig,HIGH); delayMicroseconds(10);
@@ -83,49 +195,6 @@ long smoothFast(long prev,long cur){
   return (prev*EMA_NUM + cur)/EMA_DEN;
 }
 
-/* ======= UI (ASCII + triângulo) ======= */
-String buildMapString(int bL,int bR){
-  int sL = bL==1?0 : bL==2?1 : 2;
-  int sR = bR==1?0 : bR==2?1 : 2;
-  if(bL==0) sL=1; if(bR==0) sR=1;
-  String s="|"; for(int i=0;i<sL;i++) s+=' '; s+='.'; for(int i=0;i<sR;i++) s+=' '; s+='|';
-  return s;
-}
-void drawFrontIndicator(int cx,int baseY,int bF){
-  int half=4, apexY=baseY-6;
-  if(bF==1)      display.fillTriangle(cx,apexY, cx-half,baseY, cx+half,baseY, SSD1306_WHITE);
-  else if(bF==2) display.drawTriangle(cx,apexY, cx-half,baseY, cx+half,baseY, SSD1306_WHITE);
-}
-void drawUI(long L,long F,long R,long D){
-  display.clearDisplay();
-  display.setTextSize(1);
-  display.setTextColor(SSD1306_WHITE);
-  display.setCursor(0,0); display.print("Navegacao (ASCII)");
-
-  int bL=band3(L), bF=band3(F), bR=band3(R);
-  String mapStr = buildMapString(bL,bR);
-  int mapW = textWidth(mapStr);
-  int mapX = (SCREEN_WIDTH - mapW)/2;
-  int mapY = 28;
-
-  int dotPos = mapStr.indexOf('.');
-  String prefix = mapStr.substring(0, dotPos);
-  int dotCenterX = mapX + textWidth(prefix) + textWidth(".")/2;
-
-  drawFrontIndicator(dotCenterX, mapY-2, bF);
-
-  display.setCursor(mapX, mapY); display.print(mapStr);
-
-  display.setCursor(0,42);
-  display.print("E:"); display.print(L<0?String("--"):String(L));
-  display.print("  F:"); display.print(F<0?String("--"):String(F));
-  display.print("  D:"); display.print(R<0?String("--"):String(R));
-
-  display.setCursor(0,56);
-  display.print("v "); display.print(D<0?String("--"):String(D)); display.print("cm");
-  display.display();
-}
-
 /* ======= MQTT: helpers ======= */
 void ensureWiFi(){
   if(WiFi.status()==WL_CONNECTED) return;
@@ -133,11 +202,11 @@ void ensureWiFi(){
   WiFi.begin(WIFI_SSID, WIFI_PASS);
   while(WiFi.status()!=WL_CONNECTED) delay(250);
 }
-void publishStatusOnline(){ mqtt.publish(tp("status").c_str(),"online",true); } // retain
+void publishStatusOnline(){ mqtt.publish(tp("status").c_str(),"online",true); } 
 void publishState(){
   char buf[128];
   snprintf(buf,sizeof(buf), "{\"fw\":\"1.0.0\",\"rssi_dbm\":%d}", WiFi.RSSI());
-  mqtt.publish(tp("state").c_str(), buf, true); // retain
+  mqtt.publish(tp("state").c_str(), buf, true);
 }
 void publishHeartbeat(){ mqtt.publish(tp("heartbeat").c_str(), "1"); }
 void ensureMQTT(){
@@ -145,7 +214,7 @@ void ensureMQTT(){
     if(mqtt.connect(DEVICE_ID, tp("status").c_str(), 1, true, "offline")){
       publishStatusOnline();
       publishState();
-      // mqtt.subscribe(tp("cmd/#").c_str()); // se quiser comandos
+      
     } else delay(1000);
   }
 }
@@ -156,7 +225,6 @@ void publishTelemetry(){
            bchar(sL), bchar(sF), bchar(sR), sD<0?0:sD);
   mqtt.publish(tp("telemetry").c_str(), buf);
 }
-
 /* ======= AUX: converte cm -> 'n'/'m'/'f'/'x' ======= */
 char bandChar(long v){
   if (v < 0) return 'x';          // inválido/sem leitura
@@ -165,20 +233,16 @@ char bandChar(long v){
   if (b == 2) return 'm';
   return 'f';
 }
-
 /* >>> TÓPICOS "SPLIT" PARA O APP (Gauge/Multi-State) <<< */
 void publishTelemetrySplit() {
-  // L/F/R: 'n'/'m'/'f' (ou 'x' se inválido)
   char s[2] = {0, 0};
   s[0] = bandChar(sL); mqtt.publish(tp("telemetry/L").c_str(), s);
   s[0] = bandChar(sF); mqtt.publish(tp("telemetry/F").c_str(), s);
   s[0] = bandChar(sR); mqtt.publish(tp("telemetry/R").c_str(), s);
-  // CHÃO (numérico)
   char buf[12];
   snprintf(buf, sizeof(buf), "%ld", (sD < 0 ? 0 : sD));
   mqtt.publish(tp("telemetry/down").c_str(), buf);
 }
-
 void publishHazard(const char* dir,const char* type,long dist_cm){
   char buf[96];
   snprintf(buf,sizeof(buf), "{\"dir\":\"%s\",\"type\":\"%s\",\"dist_cm\":%ld}",
@@ -196,7 +260,7 @@ void publishStep(long down_cm,long delta_cm){
 /* ======= Setup / Loop ======= */
 void setup(){
   // I2C + OLED
-  Wire.begin(I2C_SDA, I2C_SCL);
+  Wire.begin(21, 22);
   display.begin(SSD1306_SWITCHCAPVCC, OLED_ADDR);
   display.clearDisplay(); display.display();
 
@@ -229,53 +293,54 @@ void loop(){
   ensureMQTT();
   mqtt.loop();
 
-  unsigned long now=millis();
+  unsigned long now = millis();
 
-  if(now - tRead >= READ_MS){
+  // Leitura periódica dos sensores
+  if (now - tRead >= READ_MS) {
     tRead = now;
 
-    // leituras (sequencial -> menos crosstalk)
+    // Leituras sequenciais (reduz crosstalk entre HC-SR04)
     dL = readUltrasonicCM(S_left.trig,  S_left.echo);  delay(INTER_SENSOR_DELAY_MS);
     dF = readUltrasonicCM(S_front.trig, S_front.echo); delay(INTER_SENSOR_DELAY_MS);
     dR = readUltrasonicCM(S_right.trig, S_right.echo); delay(INTER_SENSOR_DELAY_MS);
     dD = readUltrasonicCM(S_down.trig,  S_down.echo);  delay(INTER_SENSOR_DELAY_MS);
 
-    // suavização
-    sL = smoothFast(sL,dL);
-    sF = smoothFast(sF,dF);
-    sR = smoothFast(sR,dR);
-    sD = smoothFast(sD,dD);
+    // Suavização (EMA rápida)
+    sL = smoothFast(sL, dL);
+    sF = smoothFast(sF, dF);
+    sR = smoothFast(sR, dR);
+    sD = smoothFast(sD, dD);
 
-    // UI
-    drawUI(sL,sF,sR,sD);
+    // --- Display: mini-mapa + textos estilo do mock ---
+    renderMapTiny(display, sL, sF, sR, sD);
 
-    // Eventos (quando entra em NEAR)
-    int bL=band3(sL), bF=band3(sF), bR=band3(sR);
-    if(bL==1 && lastBandL!=1) publishHazard("left","obstacle", sL);
-    if(bF==1 && lastBandF!=1) publishHazard("front","obstacle", sF);
-    if(bR==1 && lastBandR!=1) publishHazard("right","obstacle", sR);
-    lastBandL=bL; lastBandF=bF; lastBandR=bR;
+    // Eventos quando entrar em "near" (banda 1)
+    int bL = band3(sL), bF = band3(sF), bR = band3(sR);
+    if (bL == 1 && lastBandL != 1) publishHazard("left",  "obstacle", sL);
+    if (bF == 1 && lastBandF != 1) publishHazard("front", "obstacle", sF);
+    if (bR == 1 && lastBandR != 1) publishHazard("right", "obstacle", sR);
+    lastBandL = bL; lastBandF = bF; lastBandR = bR;
 
-    // Degrau / desnível (variação significativa)
+    // Degrau / desnível detectado por variação do sensor de chão
     long deltaDown = sD - lastDown;
-    if(labs(deltaDown) >= 15){
-      publishStep(sD<0?0:sD, deltaDown);
-      lastDown = (sD<0 ? lastDown : sD);
+    if (labs(deltaDown) >= 15) {                      // limiar de 15 cm
+      publishStep(sD < 0 ? 0 : sD, deltaDown);        // MQTT: event/step
+      if (sD >= 0) lastDown = sD;
     }
   }
 
-  // Telemetria 1 Hz (JSON + SPLIT p/ widgets)
-  if(now - tTelem >= TELEMETRY_MS){
+  // Telemetria (JSON agregado + tópicos split p/ dashboards)
+  if (now - tTelem >= TELEMETRY_MS) {
     tTelem = now;
-    publishTelemetry();        // JSON agregado
-    publishTelemetrySplit();   // tópicos simples p/ Gauge & Multi-State
+    publishTelemetry();
+    publishTelemetrySplit();
   }
 
-  // Heartbeat 30 s
-  if(now - tHB >= HEARTBEAT_MS){
+  // Heartbeat periódico
+  if (now - tHB >= HEARTBEAT_MS) {
     tHB = now;
     publishHeartbeat();
   }
 
-  if(FRAME_DELAY_MS) delay(FRAME_DELAY_MS);
+  if (FRAME_DELAY_MS) delay(FRAME_DELAY_MS);
 }
